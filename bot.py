@@ -1,6 +1,7 @@
 import math
 import logging
 import requests
+import os
 from datetime import datetime, timedelta
 import pytz
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
@@ -9,8 +10,13 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-TOKEN = "8970204551:AAGhNR7zOoqmpzMatxbxOptH4rCi9MxTZMI"
+# يفضل وضع التوكن في متغيرات البيئة (Environment Variables) في Render
+TOKEN = os.getenv("TELEGRAM_TOKEN", "8970204551:AAGhNR7zOoqmpzMatxbxOptH4rCi9MxTZMI")
 WEATHER_API_KEY = "f53e84bcfb68ce9facdd257edf4ac9a4"
+
+# ==================== إعدادات الوسيط (Cloudflare Worker) ====================
+# ضع رابط الـ Worker الخاص بك هنا (بدون /bot في النهاية)
+PROXY_BASE_URL = "https://your-worker-url.workers.dev" 
 
 # ==================== النموذج المستخدم ====================
 FORECAST_MODEL = "ecmwf_ifs025"
@@ -478,11 +484,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("اختر المنطقة:", reply_markup=build_regions_keyboard())
         
     elif text == "📅 توقع يومان للمناطق الأربع":
-        # تمثيل مبدئي، يمكنك إضافة دالة مخصصة لهذا الخيار
         await update.message.reply_text("هذا الخيار قيد التطوير.")
         
     else:
-        # البحث عن المدينة أو القرية
         report, markup = get_weather_now(text)
         await update.message.reply_text(report, reply_markup=markup, parse_mode="Markdown")
 
@@ -520,17 +524,24 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     elif data.startswith("f5d_"):
         region = data.split("_", 1)[1]
-        # مثال مبسط لجلب توقعات المنطقة
         await query.edit_message_text(f"توقعات 5 أيام لمنطقة {region} قيد التطوير.")
 
 def main():
-    application = Application.builder().token(TOKEN).build()
+    # هنا تم دمج إعدادات الوسيط (Cloudflare Worker)
+    # تأكد من تغيير PROXY_BASE_URL في أعلى الكود إلى رابط الـ Worker الخاص بك
+    application = (
+        Application.builder()
+        .token(TOKEN)
+        .base_url(f"{PROXY_BASE_URL}/bot")
+        .base_file_url(f"{PROXY_BASE_URL}/file/bot")
+        .build()
+    )
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_handler(CallbackQueryHandler(handle_callback))
 
-    logger.info("Bot is running...")
+    logger.info("Bot is running with Proxy...")
     application.run_polling()
 
 if __name__ == '__main__':
